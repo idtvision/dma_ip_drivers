@@ -1,0 +1,7 @@
+Release Notes XDMA Windows 2018.2
+
+Added three features
+
+- Ioctl for repeatedly writing to a user given register without incrementing the address counter i.e. keyhole writes
+- Ioctl to replicate mmap functionality from Linux driver, map anhy bar to user space for memory access
+- Installers for Release versions that install the driver to device manager, and put the executables and library in the Program Files folder on the host machine
