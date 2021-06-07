@@ -1,7 +1,7 @@
 /*-
  * BSD LICENSE
  *
- * Copyright(c) 2017-2019 Xilinx, Inc. All rights reserved.
+ * Copyright(c) 2017-2021 Xilinx, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -50,9 +50,10 @@
 
 #include "qdma.h"
 #include "version.h"
-#include "qdma_access.h"
+#include "qdma_access_common.h"
 #include "qdma_mbox_protocol.h"
 #include "qdma_mbox.h"
+#include "qdma_devops.h"
 
 static int eth_qdma_vf_dev_init(struct rte_eth_dev *dev);
 static int eth_qdma_vf_dev_uninit(struct rte_eth_dev *dev);
@@ -61,177 +62,177 @@ static int eth_qdma_vf_dev_uninit(struct rte_eth_dev *dev);
  * The set of PCI devices this driver supports
  */
 static struct rte_pci_id qdma_vf_pci_id_tbl[] = {
-#define RTE_PCI_DEV_ID_DECL_XNIC(vend, dev) {RTE_PCI_DEVICE(vend, dev)},
+#define RTE_PCI_DEV_ID_DECL(vend, dev) {RTE_PCI_DEVICE(vend, dev)},
 #ifndef PCI_VENDOR_ID_XILINX
 #define PCI_VENDOR_ID_XILINX 0x10ee
 #endif
 
 	/** Gen 1 VF */
 	/** PCIe lane width x1 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa011)	/* VF on PF 0 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa111)	/* VF on PF 1 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa211)	/* VF on PF 2 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa311)	/* VF on PF 3 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa011)	/* VF on PF 0 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa111)	/* VF on PF 1 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa211)	/* VF on PF 2 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa311)	/* VF on PF 3 */
 	/** PCIe lane width x4 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa014)	/* VF on PF 0 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa114)	/* VF on PF 1 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa214)	/* VF on PF 2 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa314)	/* VF on PF 3 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa014)	/* VF on PF 0 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa114)	/* VF on PF 1 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa214)	/* VF on PF 2 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa314)	/* VF on PF 3 */
 	/** PCIe lane width x8 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa018)	/* VF on PF 0 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa118)	/* VF on PF 1 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa218)	/* VF on PF 2 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa318)	/* VF on PF 3 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa018)	/* VF on PF 0 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa118)	/* VF on PF 1 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa218)	/* VF on PF 2 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa318)	/* VF on PF 3 */
 	/** PCIe lane width x16 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa01f)	/* VF on PF 0 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa11f)	/* VF on PF 1 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa21f)	/* VF on PF 2 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa31f)	/* VF on PF 3 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa01f)	/* VF on PF 0 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa11f)	/* VF on PF 1 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa21f)	/* VF on PF 2 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa31f)	/* VF on PF 3 */
 
 	/** Gen 2 VF */
 	/** PCIe lane width x1 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa021)	/* VF on PF 0 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa121)	/* VF on PF 1 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa221)	/* VF on PF 2 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa321)	/* VF on PF 3 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa021)	/* VF on PF 0 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa121)	/* VF on PF 1 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa221)	/* VF on PF 2 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa321)	/* VF on PF 3 */
 	/** PCIe lane width x4 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa024)	/* VF on PF 0 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa124)	/* VF on PF 1 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa224)	/* VF on PF 2 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa324)	/* VF on PF 3 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa024)	/* VF on PF 0 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa124)	/* VF on PF 1 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa224)	/* VF on PF 2 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa324)	/* VF on PF 3 */
 	/** PCIe lane width x8 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa028)	/* VF on PF 0 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa128)	/* VF on PF 1 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa228)	/* VF on PF 2 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa328)	/* VF on PF 3 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa028)	/* VF on PF 0 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa128)	/* VF on PF 1 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa228)	/* VF on PF 2 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa328)	/* VF on PF 3 */
 	/** PCIe lane width x16 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa02f)	/* VF on PF 0 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa12f)	/* VF on PF 1 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa22f)	/* VF on PF 2 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa32f)	/* VF on PF 3 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa02f)	/* VF on PF 0 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa12f)	/* VF on PF 1 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa22f)	/* VF on PF 2 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa32f)	/* VF on PF 3 */
 
 	/** Gen 3 VF */
 	/** PCIe lane width x1 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa031)	/* VF on PF 0 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa131)	/* VF on PF 1 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa231)	/* VF on PF 2 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa331)	/* VF on PF 3 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa031)	/* VF on PF 0 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa131)	/* VF on PF 1 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa231)	/* VF on PF 2 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa331)	/* VF on PF 3 */
 	/** PCIe lane width x4 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa034)	/* VF on PF 0 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa134)	/* VF on PF 1 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa234)	/* VF on PF 2 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa334)	/* VF on PF 3 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa034)	/* VF on PF 0 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa134)	/* VF on PF 1 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa234)	/* VF on PF 2 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa334)	/* VF on PF 3 */
 	/** PCIe lane width x8 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa038)	/* VF on PF 0 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa138)	/* VF on PF 1 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa238)	/* VF on PF 2 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa338)	/* VF on PF 3 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa038)	/* VF on PF 0 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa138)	/* VF on PF 1 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa238)	/* VF on PF 2 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa338)	/* VF on PF 3 */
 	/** PCIe lane width x16 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa03f)	/* VF on PF 0 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa13f)	/* VF on PF 1 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa23f)	/* VF on PF 2 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa33f)	/* VF on PF 3 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa03f)	/* VF on PF 0 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa13f)	/* VF on PF 1 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa23f)	/* VF on PF 2 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa33f)	/* VF on PF 3 */
 
 	/** Gen 4 VF */
 	/** PCIe lane width x1 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa041)	/* VF on PF 0 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa141)	/* VF on PF 1 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa241)	/* VF on PF 2 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa341)	/* VF on PF 3 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa041)	/* VF on PF 0 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa141)	/* VF on PF 1 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa241)	/* VF on PF 2 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa341)	/* VF on PF 3 */
 	/** PCIe lane width x4 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa044)	/* VF on PF 0 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa144)	/* VF on PF 1 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa244)	/* VF on PF 2 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa344)	/* VF on PF 3 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa044)	/* VF on PF 0 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa144)	/* VF on PF 1 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa244)	/* VF on PF 2 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa344)	/* VF on PF 3 */
 	/** PCIe lane width x8 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa048)	/* VF on PF 0 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa148)	/* VF on PF 1 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa248)	/* VF on PF 2 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xa348)	/* VF on PF 3 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa048)	/* VF on PF 0 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa148)	/* VF on PF 1 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa248)	/* VF on PF 2 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xa348)	/* VF on PF 3 */
 
 	/** Versal */
 	/** Gen 1 VF */
 	/** PCIe lane width x1 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc011)	/* VF on PF 0 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc111)	/* VF on PF 1 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc211)	/* VF on PF 2 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc311)	/* VF on PF 3 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc011)	/* VF on PF 0 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc111)	/* VF on PF 1 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc211)	/* VF on PF 2 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc311)	/* VF on PF 3 */
 	/** PCIe lane width x4 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc014)	/* VF on PF 0 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc114)	/* VF on PF 1 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc214)	/* VF on PF 2 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc314)	/* VF on PF 3 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc014)	/* VF on PF 0 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc114)	/* VF on PF 1 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc214)	/* VF on PF 2 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc314)	/* VF on PF 3 */
 	/** PCIe lane width x8 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc018)	/* VF on PF 0 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc118)	/* VF on PF 1 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc218)	/* VF on PF 2 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc318)	/* VF on PF 3 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc018)	/* VF on PF 0 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc118)	/* VF on PF 1 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc218)	/* VF on PF 2 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc318)	/* VF on PF 3 */
 	/** PCIe lane width x16 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc01f)	/* VF on PF 0 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc11f)	/* VF on PF 1 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc21f)	/* VF on PF 2 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc31f)	/* VF on PF 3 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc01f)	/* VF on PF 0 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc11f)	/* VF on PF 1 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc21f)	/* VF on PF 2 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc31f)	/* VF on PF 3 */
 
 	/** Gen 2 VF */
 	/** PCIe lane width x1 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc021)	/* VF on PF 0 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc121)	/* VF on PF 1 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc221)	/* VF on PF 2 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc321)	/* VF on PF 3 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc021)	/* VF on PF 0 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc121)	/* VF on PF 1 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc221)	/* VF on PF 2 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc321)	/* VF on PF 3 */
 	/** PCIe lane width x4 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc024)	/* VF on PF 0 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc124)	/* VF on PF 1 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc224)	/* VF on PF 2 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc324)	/* VF on PF 3 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc024)	/* VF on PF 0 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc124)	/* VF on PF 1 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc224)	/* VF on PF 2 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc324)	/* VF on PF 3 */
 	/** PCIe lane width x8 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc028)	/* VF on PF 0 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc128)	/* VF on PF 1 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc228)	/* VF on PF 2 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc328)	/* VF on PF 3 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc028)	/* VF on PF 0 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc128)	/* VF on PF 1 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc228)	/* VF on PF 2 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc328)	/* VF on PF 3 */
 	/** PCIe lane width x16 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc02f)	/* VF on PF 0 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc12f)	/* VF on PF 1 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc22f)	/* VF on PF 2 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc32f)	/* VF on PF 3 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc02f)	/* VF on PF 0 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc12f)	/* VF on PF 1 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc22f)	/* VF on PF 2 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc32f)	/* VF on PF 3 */
 
 	/** Gen 3 VF */
 	/** PCIe lane width x1 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc031)	/* VF on PF 0 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc131)	/* VF on PF 1 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc231)	/* VF on PF 2 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc331)	/* VF on PF 3 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc031)	/* VF on PF 0 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc131)	/* VF on PF 1 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc231)	/* VF on PF 2 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc331)	/* VF on PF 3 */
 	/** PCIe lane width x4 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc034)	/* VF on PF 0 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc134)	/* VF on PF 1 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc234)	/* VF on PF 2 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc334)	/* VF on PF 3 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc034)	/* VF on PF 0 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc134)	/* VF on PF 1 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc234)	/* VF on PF 2 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc334)	/* VF on PF 3 */
 	/** PCIe lane width x8 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc038)	/* VF on PF 0 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc138)	/* VF on PF 1 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc238)	/* VF on PF 2 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc338)	/* VF on PF 3 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc038)	/* VF on PF 0 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc138)	/* VF on PF 1 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc238)	/* VF on PF 2 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc338)	/* VF on PF 3 */
 	/** PCIe lane width x16 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc03f)	/* VF on PF 0 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc13f)	/* VF on PF 1 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc23f)	/* VF on PF 2 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc33f)	/* VF on PF 3 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc03f)	/* VF on PF 0 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc13f)	/* VF on PF 1 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc23f)	/* VF on PF 2 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc33f)	/* VF on PF 3 */
 
 	/** Gen 4 VF */
 	/** PCIe lane width x1 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc041)	/* VF on PF 0 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc141)	/* VF on PF 1 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc241)	/* VF on PF 2 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc341)	/* VF on PF 3 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc041)	/* VF on PF 0 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc141)	/* VF on PF 1 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc241)	/* VF on PF 2 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc341)	/* VF on PF 3 */
 	/** PCIe lane width x4 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc044)	/* VF on PF 0 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc144)	/* VF on PF 1 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc244)	/* VF on PF 2 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc344)	/* VF on PF 3 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc044)	/* VF on PF 0 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc144)	/* VF on PF 1 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc244)	/* VF on PF 2 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc344)	/* VF on PF 3 */
 	/** PCIe lane width x8 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc048)	/* VF on PF 0 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc148)	/* VF on PF 1 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc248)	/* VF on PF 2 */
-	RTE_PCI_DEV_ID_DECL_XNIC(PCI_VENDOR_ID_XILINX, 0xc348)	/* VF on PF 3 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc048)	/* VF on PF 0 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc148)	/* VF on PF 1 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc248)	/* VF on PF 2 */
+	RTE_PCI_DEV_ID_DECL(PCI_VENDOR_ID_XILINX, 0xc348)	/* VF on PF 3 */
 
 	{ .vendor_id = 0, /* sentinel */ },
 };
@@ -253,7 +254,9 @@ static int qdma_ethdev_online(struct rte_eth_dev *dev)
 		PMD_DRV_LOG(ERR, "%x, send hello failed %d.\n",
 			    qdma_dev->func_id, rv);
 
-	rv = qdma_mbox_vf_dev_info_get(m->raw_data, &qdma_dev->dev_cap);
+	rv = qdma_mbox_vf_dev_info_get(m->raw_data,
+				&qdma_dev->dev_cap,
+				&qdma_dev->dma_device_index);
 
 	if (rv < 0)
 		PMD_DRV_LOG(ERR, "%x, failed to get dev info %d.\n",
@@ -295,7 +298,7 @@ static int qdma_vf_set_qrange(struct rte_eth_dev *dev)
 		return -ENOMEM;
 
 	qdma_mbox_compose_vf_fmap_prog(qdma_dev->func_id,
-					qdma_dev->dev_cap.num_qs,
+					(uint16_t)qdma_dev->qsets_en,
 					(int)qdma_dev->queue_base,
 					m->raw_data);
 	rv = qdma_mbox_msg_send(dev, m, MBOX_OP_RSP_TIMEOUT);
@@ -377,7 +380,7 @@ static int qdma_rxq_context_setup(struct rte_eth_dev *dev, uint16_t qid)
 		cmpt_desc_fmt = CMPT_CNTXT_DESC_SIZE_8B;
 		break;
 	}
-	descq_conf.ring_bs_addr = rxq->rx_mz->phys_addr;
+	descq_conf.ring_bs_addr = rxq->rx_mz->iova;
 	descq_conf.en_bypass = rxq->en_bypass;
 	descq_conf.irq_arm = 0;
 	descq_conf.at = 0;
@@ -393,7 +396,7 @@ static int qdma_rxq_context_setup(struct rte_eth_dev *dev, uint16_t qid)
 	} else {/* st c2h*/
 		descq_conf.desc_sz = SW_DESC_CNTXT_C2H_STREAM_DMA;
 		descq_conf.forced_en = 1;
-		descq_conf.cmpt_ring_bs_addr = rxq->rx_cmpt_mz->phys_addr;
+		descq_conf.cmpt_ring_bs_addr = rxq->rx_cmpt_mz->iova;
 		descq_conf.cmpt_desc_sz = cmpt_desc_fmt;
 		descq_conf.triggermode = rxq->triggermode;
 
@@ -455,7 +458,7 @@ static int qdma_txq_context_setup(struct rte_eth_dev *dev, uint16_t qid)
 	memset(&descq_conf, 0, sizeof(struct mbox_descq_conf));
 	txq = (struct qdma_tx_queue *)dev->data->tx_queues[qid];
 	qid_hw =  qdma_dev->queue_base + txq->queue_id;
-	descq_conf.ring_bs_addr = txq->tx_mz->phys_addr;
+	descq_conf.ring_bs_addr = txq->tx_mz->iova;
 	descq_conf.en_bypass = txq->en_bypass;
 	descq_conf.wbi_intvl_en = 1;
 	descq_conf.wbi_chk = 1;
@@ -563,14 +566,14 @@ static int qdma_vf_dev_link_update(struct rte_eth_dev *dev,
 {
 	dev->data->dev_link.link_status = ETH_LINK_UP;
 	dev->data->dev_link.link_duplex = ETH_LINK_FULL_DUPLEX;
-	dev->data->dev_link.link_speed = ETH_SPEED_NUM_10G;
+	dev->data->dev_link.link_speed = ETH_SPEED_NUM_100G;
 
 	PMD_DRV_LOG(INFO, "Link update done\n");
 
 	return 0;
 }
 
-static void qdma_vf_dev_infos_get(__rte_unused struct rte_eth_dev *dev,
+static int qdma_vf_dev_infos_get(__rte_unused struct rte_eth_dev *dev,
 					struct rte_eth_dev_info *dev_info)
 {
 	struct qdma_pci_dev *qdma_dev = dev->data->dev_private;
@@ -581,9 +584,11 @@ static void qdma_vf_dev_infos_get(__rte_unused struct rte_eth_dev *dev,
 	dev_info->min_rx_bufsize = QDMA_MIN_RXBUFF_SIZE;
 	dev_info->max_rx_pktlen = DMA_BRAM_SIZE;
 	dev_info->max_mac_addrs = 1;
+
+	return 0;
 }
 
-static void qdma_vf_dev_stop(struct rte_eth_dev *dev)
+static int qdma_vf_dev_stop(struct rte_eth_dev *dev)
 {
 #ifdef RTE_LIBRTE_QDMA_DEBUG_DRIVER
 	struct qdma_pci_dev *qdma_dev = dev->data->dev_private;
@@ -597,9 +602,11 @@ static void qdma_vf_dev_stop(struct rte_eth_dev *dev)
 		qdma_vf_dev_tx_queue_stop(dev, qid);
 	for (qid = 0; qid < dev->data->nb_rx_queues; qid++)
 		qdma_vf_dev_rx_queue_stop(dev, qid);
+
+	return 0;
 }
 
-static void qdma_vf_dev_close(struct rte_eth_dev *dev)
+int qdma_vf_dev_close(struct rte_eth_dev *dev)
 {
 	struct qdma_pci_dev *qdma_dev = dev->data->dev_private;
 	struct qdma_tx_queue *txq;
@@ -695,6 +702,8 @@ static void qdma_vf_dev_close(struct rte_eth_dev *dev)
 	rte_free(qdma_dev->q_info);
 	qdma_dev->q_info = NULL;
 	qdma_dev->dev_configured = 0;
+
+	return 0;
 }
 
 static int qdma_vf_dev_reset(struct rte_eth_dev *dev)
@@ -719,13 +728,12 @@ static int qdma_vf_dev_reset(struct rte_eth_dev *dev)
 		 * for a maximum of 60 secs
 		 */
 		PMD_DRV_LOG(INFO,
-			"%s: Waiting for reset done message form PF",
+			"%s: Waiting for reset done message from PF",
 			__func__);
 		while (i < RESET_TIMEOUT) {
 			if (qdma_dev->reset_state ==
 					RESET_STATE_RECV_PF_RESET_DONE) {
 				qdma_mbox_uninit(dev);
-				qdma_mbox_init(dev);
 
 				ret = eth_qdma_vf_dev_init(dev);
 				return ret;
@@ -956,14 +964,13 @@ int qdma_vf_dev_tx_queue_stop(struct rte_eth_dev *dev, uint16_t qid)
 	}
 
 	qdma_queue_context_invalidate(dev, qid, txq->st_mode, 0);
-	qdma_reset_tx_queue(txq);
 
 	/* Free mbufs if any pending in the ring */
-	for (i = 0; i < txq->nb_tx_desc - 1; i++) {
+	for (i = 0; i < txq->nb_tx_desc; i++) {
 		rte_pktmbuf_free(txq->sw_ring[i]);
 		txq->sw_ring[i] = NULL;
 	}
-
+	qdma_reset_tx_queue(txq);
 	dev->data->tx_queue_state[qid] = RTE_ETH_QUEUE_STATE_STOPPED;
 	return 0;
 }
@@ -1033,14 +1040,15 @@ static int eth_qdma_vf_dev_init(struct rte_eth_dev *dev)
 	}
 
 	/* allocate space for a single Ethernet MAC address */
-	dev->data->mac_addrs = rte_zmalloc("qdma_vf", ETHER_ADDR_LEN * 1, 0);
+	dev->data->mac_addrs = rte_zmalloc("qdma_vf",
+			RTE_ETHER_ADDR_LEN * 1, 0);
 	if (dev->data->mac_addrs == NULL)
 		return -ENOMEM;
 
 	/* Copy some dummy Ethernet MAC address for XDMA device
 	 * This will change in real NIC device...
 	 */
-	for (i = 0; i < ETHER_ADDR_LEN; ++i)
+	for (i = 0; i < RTE_ETHER_ADDR_LEN; ++i)
 		dev->data->mac_addrs[0].addr_bytes[i] = 0x15 + i;
 
 	/* Init system & device */
@@ -1048,19 +1056,6 @@ static int eth_qdma_vf_dev_init(struct rte_eth_dev *dev)
 	dma_priv->func_id = 0;
 	dma_priv->is_vf = 1;
 	dma_priv->timer_count = DEFAULT_TIMER_CNT_TRIG_MODE_TIMER;
-
-	if (dma_priv->dev_cap.cmpt_trig_count_timer) {
-		/* Setting default Mode to
-		 * RTE_PMD_QDMA_TRIG_MODE_USER_TIMER_COUNT
-		 */
-		dma_priv->trigger_mode =
-				RTE_PMD_QDMA_TRIG_MODE_USER_TIMER_COUNT;
-	} else {
-		/* Setting default Mode to RTE_PMD_QDMA_TRIG_MODE_USER_TIMER */
-		dma_priv->trigger_mode = RTE_PMD_QDMA_TRIG_MODE_USER_TIMER;
-	}
-	if (dma_priv->trigger_mode == RTE_PMD_QDMA_TRIG_MODE_USER_TIMER_COUNT)
-		dma_priv->timer_count = DEFAULT_TIMER_CNT_TRIG_MODE_COUNT_TIMER;
 
 	dma_priv->en_desc_prefetch = 0;
 	dma_priv->cmpt_desc_len = DEFAULT_QDMA_CMPT_DESC_LEN;
@@ -1114,15 +1109,14 @@ static int eth_qdma_vf_dev_init(struct rte_eth_dev *dev)
 		return -EINVAL;
 	}
 
-	/* Store BAR address and length of User BAR */
+	/* Store BAR address and length of AXI Master Lite BAR(user bar)*/
 	if (dma_priv->user_bar_idx >= 0) {
 		baseaddr = (uint8_t *)
 			     pci_dev->mem_resource[dma_priv->user_bar_idx].addr;
 		dma_priv->bar_addr[dma_priv->user_bar_idx] = baseaddr;
 	}
 
-	if ((dma_priv->device_type == QDMA_DEVICE_VERSAL) &&
-			(dma_priv->versal_ip_type == QDMA_VERSAL_HARD_IP))
+	if (dma_priv->ip_type == QDMA_VERSAL_HARD_IP)
 		dma_priv->dev_cap.mailbox_intr = 0;
 	else
 		dma_priv->dev_cap.mailbox_intr = 1;
@@ -1134,6 +1128,19 @@ static int eth_qdma_vf_dev_init(struct rte_eth_dev *dev)
 		rte_free(dev->data->mac_addrs);
 		return -EINVAL;
 	}
+
+	if (dma_priv->dev_cap.cmpt_trig_count_timer) {
+		/* Setting default Mode to
+		 * RTE_PMD_QDMA_TRIG_MODE_USER_TIMER_COUNT
+		 */
+		dma_priv->trigger_mode =
+				RTE_PMD_QDMA_TRIG_MODE_USER_TIMER_COUNT;
+	} else {
+		/* Setting default Mode to RTE_PMD_QDMA_TRIG_MODE_USER_TIMER */
+		dma_priv->trigger_mode = RTE_PMD_QDMA_TRIG_MODE_USER_TIMER;
+	}
+	if (dma_priv->trigger_mode == RTE_PMD_QDMA_TRIG_MODE_USER_TIMER_COUNT)
+		dma_priv->timer_count = DEFAULT_TIMER_CNT_TRIG_MODE_COUNT_TIMER;
 
 	dma_priv->reset_state = RESET_STATE_IDLE;
 

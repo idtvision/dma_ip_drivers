@@ -1,7 +1,7 @@
 /*-
  * BSD LICENSE
  *
- * Copyright(c) 2019 Xilinx, Inc. All rights reserved.
+ * Copyright(c) 2019-2021 Xilinx, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,8 +32,9 @@
 
 #include <rte_mbuf.h>
 #include <rte_cycles.h>
+#include <rte_ethdev.h>
 #include "qdma_user.h"
-#include "qdma_access.h"
+#include "qdma_access_common.h"
 #include "qdma_log.h"
 
 #include <fcntl.h>
@@ -48,21 +49,37 @@
  *   Pointer to variable to which completion entry details to be extracted.
  *
  * @return
- *   None.
+ *   0 on success and -1 on failure.
  */
-int qdma_ul_extract_st_cmpt_info(void *ul_cmpt_entry,
-			struct c2h_cmpt_info *cmpt_info)
+int qdma_ul_extract_st_cmpt_info(void *ul_cmpt_entry, void *cmpt_info)
 {
-	struct qdma_ul_st_cmpt_ring *cmpt_data;
+	union qdma_ul_st_cmpt_ring *cmpt_data, *cmpt_desc;
 
-	cmpt_data = (struct qdma_ul_st_cmpt_ring *)(ul_cmpt_entry);
+	cmpt_desc = (union qdma_ul_st_cmpt_ring *)(ul_cmpt_entry);
+	cmpt_data = (union qdma_ul_st_cmpt_ring *)(cmpt_info);
 
-	cmpt_info->err = cmpt_data->err;
-	cmpt_info->desc_used = cmpt_data->desc_used;
-	cmpt_info->length = cmpt_data->length;
-	if (unlikely(!cmpt_data->desc_used))
-		cmpt_info->length = 0;
+	if (unlikely(cmpt_desc->err || cmpt_desc->data_frmt))
+		return -1;
+
+	cmpt_data->data = cmpt_desc->data;
+	if (unlikely(!cmpt_desc->desc_used))
+		cmpt_data->length = 0;
+
 	return 0;
+}
+
+/**
+ * Extract the packet length from the given completion entry.
+ *
+ * @param ul_cmpt_entry
+ *   Pointer to completion entry to be extracted.
+ *
+ * @return
+ *   Packet length
+ */
+uint16_t qdma_ul_get_cmpt_pkt_len(void *ul_cmpt_entry)
+{
+	return ((union qdma_ul_st_cmpt_ring *)ul_cmpt_entry)->length;
 }
 
 /**
@@ -87,14 +104,14 @@ int qdma_ul_process_immediate_data_st(void *qhndl, void *cmpt_entry,
 #ifndef TEST_64B_DESC_BYPASS
 	uint16_t i = 0;
 	enum qdma_device_type dev_type;
-	enum qdma_versal_ip_type versal_ip_type;
+	enum qdma_ip_type ip_type;
 #else
 	int ret = 0;
 #endif
 	uint16_t queue_id = 0;
 
 	queue_id = qdma_get_rx_queue_id(qhndl);
-	sprintf(fln, "q_%d_%s", queue_id,
+	snprintf(fln, sizeof(fln), "q_%d_%s", queue_id,
 			"immmediate_data.txt");
 	ofd = open(fln, O_RDWR | O_CREAT | O_APPEND |
 			O_SYNC, 0666);
@@ -114,10 +131,9 @@ int qdma_ul_process_immediate_data_st(void *qhndl, void *cmpt_entry,
 			 queue_id, cmpt_desc_len,
 			 ret);
 #else
-	qdma_get_device_info(qhndl, &dev_type, &versal_ip_type);
+	qdma_get_device_info(qhndl, &dev_type, &ip_type);
 
-	if ((dev_type == QDMA_DEVICE_VERSAL) &&
-			(versal_ip_type == QDMA_VERSAL_HARD_IP)) {
+	if (ip_type == QDMA_VERSAL_HARD_IP) {
 		//Ignoring first 20 bits of length feild
 		dprintf(ofd, "%02x",
 			(*((uint8_t *)cmpt_entry + 2) & 0xF0));
@@ -138,55 +154,50 @@ int qdma_ul_process_immediate_data_st(void *qhndl, void *cmpt_entry,
 }
 
 /**
- * Updates the ST c2h descriptor.
- *
- * @param mb
- *   Pointer to memory buffer.
- * @param desc
- *   Pointer to descriptor entry.
- *
- * @return
- *   None.
- */
-int qdma_ul_update_st_c2h_desc(struct rte_mbuf *mb, void *desc)
-{
-	struct qdma_ul_st_c2h_desc *desc_data =
-			(struct qdma_ul_st_c2h_desc *)(desc);
-
-	/* low 32-bits of phys addr must be 4KB aligned... */
-	desc_data->dst_addr = (uint64_t)mb->buf_physaddr +
-				RTE_PKTMBUF_HEADROOM;
-	return 0;
-}
-
-/**
- * Updates the ST h2c descriptor.
+ * Updates the ST H2C descriptor.
  *
  * @param qhndl
  *   Pointer to TX queue handle.
+ * @param q_offloads
+ *   Offloads supported for the queue.
  * @param mb
  *   Pointer to memory buffer.
- * @param desc
- *   Pointer to descriptor entry.
  *
  * @return
  *   None.
  */
-int qdma_ul_update_st_h2c_desc(void *qhndl, struct rte_mbuf *mb)
+int qdma_ul_update_st_h2c_desc(void *qhndl, uint64_t q_offloads,
+				struct rte_mbuf *mb)
 {
+	(void)q_offloads;
 	struct qdma_ul_st_h2c_desc *desc_info;
 	int nsegs = mb->nb_segs;
+	int pkt_segs = nsegs;
 
-	while (nsegs && mb) {
+	if (nsegs == 1) {
 		desc_info = get_st_h2c_desc(qhndl);
-
 		desc_info->len = rte_pktmbuf_data_len(mb);
 		desc_info->pld_len = desc_info->len;
-		desc_info->src_addr = mb->buf_physaddr + mb->data_off;
-		desc_info->flags = 0;
+		desc_info->src_addr = mb->buf_iova + mb->data_off;
+		desc_info->flags = (S_H2C_DESC_F_SOP | S_H2C_DESC_F_EOP);
 		desc_info->cdh_flags = 0;
-		nsegs--;
-		mb = mb->next;
+	} else {
+		while (nsegs && mb) {
+			desc_info = get_st_h2c_desc(qhndl);
+
+			desc_info->len = rte_pktmbuf_data_len(mb);
+			desc_info->pld_len = desc_info->len;
+			desc_info->src_addr = mb->buf_iova + mb->data_off;
+			desc_info->flags = 0;
+			if (nsegs == pkt_segs)
+				desc_info->flags |= S_H2C_DESC_F_SOP;
+			if (nsegs == 1)
+				desc_info->flags |= S_H2C_DESC_F_EOP;
+			desc_info->cdh_flags = 0;
+
+			nsegs--;
+			mb = mb->next;
+		}
 	}
 	return 0;
 }
@@ -212,7 +223,7 @@ int qdma_ul_update_mm_c2h_desc(void *qhndl, struct rte_mbuf *mb, void *desc)
 	/* make it so the data pointer starts there too... */
 	mb->data_off = RTE_PKTMBUF_HEADROOM;
 	/* low 32-bits of phys addr must be 4KB aligned... */
-	desc_info->dst_addr = (uint64_t)mb->buf_physaddr + RTE_PKTMBUF_HEADROOM;
+	desc_info->dst_addr = (uint64_t)mb->buf_iova + RTE_PKTMBUF_HEADROOM;
 	desc_info->dv = 1;
 	desc_info->eop = 1;
 	desc_info->sop = 1;
@@ -237,7 +248,7 @@ int qdma_ul_update_mm_h2c_desc(void *qhndl, struct rte_mbuf *mb)
 	struct qdma_ul_mm_desc *desc_info;
 
 	desc_info = (struct qdma_ul_mm_desc *)get_mm_h2c_desc(qhndl);
-	desc_info->src_addr = mb->buf_physaddr + mb->data_off;
+	desc_info->src_addr = mb->buf_iova + mb->data_off;
 	desc_info->dst_addr = get_mm_h2c_ep_addr(qhndl);
 	desc_info->dv = 1;
 	desc_info->eop = 1;

@@ -1,5 +1,5 @@
 /*
- * Copyright(c) 2019 Xilinx, Inc. All rights reserved.
+ * Copyright(c) 2019-2020 Xilinx, Inc. All rights reserved.
  *
  * BSD LICENSE
  *
@@ -30,12 +30,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef LIBQDMA_QDMA_PLATFORM_H_
-#define LIBQDMA_QDMA_PLATFORM_H_
-
-#include "qdma_access.h"
-#include "qdma_access_export.h"
-#include "qdma_platform_env.h"
+#ifndef __QDMA_PLATFORM_H_
+#define __QDMA_PLATFORM_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -47,6 +43,8 @@ extern "C" {
  * Header file *qdma_platform_env.h* defines function signatures that are
  * required to be implemented by platform specific drivers.
  */
+
+#include "qdma_access_common.h"
 
 /*****************************************************************************/
 /**
@@ -68,6 +66,14 @@ void *qdma_calloc(uint32_t num_blocks, uint32_t size);
  * Return:	None
  *****************************************************************************/
 void qdma_memfree(void *memptr);
+
+/*****************************************************************************/
+/**
+ * qdma_resource_lock_init() - Init lock to access resource management APIs
+ *
+ * @return	None
+ *****************************************************************************/
+int qdma_resource_lock_init(void);
 
 /*****************************************************************************/
 /**
@@ -141,28 +147,6 @@ void qdma_udelay(uint32_t delay_usec);
 
 /*****************************************************************************/
 /**
- * qdma_hw_error_handler() - function to handle the hardware errors
- *
- * @dev_hndl:   device handle
- * @err_idx: error index
- *
- * Return:	0   - success and < 0 - failure
- *****************************************************************************/
-void qdma_hw_error_handler(void *dev_hndl, enum qdma_error_idx err_idx);
-
-/*****************************************************************************/
-/**
- * qdma_get_device_attr() - function to get the device attributes
- *
- * @dev_hndl:   device handle
- * @dev_cap: pointer to hold the device capabilities
- *
- * Return:	0   - success and < 0 - failure
- *****************************************************************************/
-void qdma_get_device_attr(void *dev_hndl, struct qdma_dev_attributes **dev_cap);
-
-/*****************************************************************************/
-/**
  * qdma_get_hw_access() - function to get the qdma_hw_access
  *
  * @dev_hndl:   device handle
@@ -197,4 +181,4 @@ int qdma_get_err_code(int acc_err_code);
 }
 #endif
 
-#endif /* LIBQDMA_QDMA_PLATFORM_H_ */
+#endif /* __QDMA_PLATFORM_H_ */

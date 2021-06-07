@@ -32,7 +32,6 @@
 
 #define DRV_MODULE_NAME		"xdma"
 #define DRV_MODULE_DESC		"Xilinx XDMA Reference Driver"
-#define DRV_MODULE_RELDATE	"Feb. 2018"
 
 static char version[] =
 	DRV_MODULE_DESC " " DRV_MODULE_NAME " v" DRV_MODULE_VERSION "\n";
@@ -46,65 +45,7 @@ MODULE_LICENSE("Dual BSD/GPL");
 static int xpdev_cnt;
 
 static const struct pci_device_id pci_ids[] = {
-	{ PCI_DEVICE(0x10ee, 0x903f), },
-	{ PCI_DEVICE(0x10ee, 0x9038), },
-	{ PCI_DEVICE(0x10ee, 0x9028), },
-	{ PCI_DEVICE(0x10ee, 0x9018), },
-	{ PCI_DEVICE(0x10ee, 0x9034), },
-	{ PCI_DEVICE(0x10ee, 0x9024), },
-	{ PCI_DEVICE(0x10ee, 0x9014), },
-	{ PCI_DEVICE(0x10ee, 0x9032), },
-	{ PCI_DEVICE(0x10ee, 0x9022), },
-	{ PCI_DEVICE(0x10ee, 0x9012), },
-	{ PCI_DEVICE(0x10ee, 0x9031), },
-	{ PCI_DEVICE(0x10ee, 0x9021), },
-	{ PCI_DEVICE(0x10ee, 0x9011), },
-
-	{ PCI_DEVICE(0x10ee, 0x8011), },
-	{ PCI_DEVICE(0x10ee, 0x8012), },
-	{ PCI_DEVICE(0x10ee, 0x8014), },
-	{ PCI_DEVICE(0x10ee, 0x8018), },
-	{ PCI_DEVICE(0x10ee, 0x8021), },
-	{ PCI_DEVICE(0x10ee, 0x8022), },
-	{ PCI_DEVICE(0x10ee, 0x8024), },
-	{ PCI_DEVICE(0x10ee, 0x8028), },
-	{ PCI_DEVICE(0x10ee, 0x8031), },
-	{ PCI_DEVICE(0x10ee, 0x8032), },
-	{ PCI_DEVICE(0x10ee, 0x8034), },
-	{ PCI_DEVICE(0x10ee, 0x8038), },
-
-	{ PCI_DEVICE(0x10ee, 0x7011), },
-	{ PCI_DEVICE(0x10ee, 0x7012), },
-	{ PCI_DEVICE(0x10ee, 0x7014), },
-	{ PCI_DEVICE(0x10ee, 0x7018), },
-	{ PCI_DEVICE(0x10ee, 0x7021), },
-	{ PCI_DEVICE(0x10ee, 0x7022), },
-	{ PCI_DEVICE(0x10ee, 0x7024), },
-	{ PCI_DEVICE(0x10ee, 0x7028), },
-	{ PCI_DEVICE(0x10ee, 0x7031), },
-	{ PCI_DEVICE(0x10ee, 0x7032), },
-	{ PCI_DEVICE(0x10ee, 0x7034), },
-	{ PCI_DEVICE(0x10ee, 0x7038), },
-
-	{ PCI_DEVICE(0x10ee, 0x6828), },
-	{ PCI_DEVICE(0x10ee, 0x6830), },
-	{ PCI_DEVICE(0x10ee, 0x6928), },
-	{ PCI_DEVICE(0x10ee, 0x6930), },
-	{ PCI_DEVICE(0x10ee, 0x6A28), },
-	{ PCI_DEVICE(0x10ee, 0x6A30), },
-	{ PCI_DEVICE(0x10ee, 0x6D30), },
-
-	{ PCI_DEVICE(0x10ee, 0x4808), },
-	{ PCI_DEVICE(0x10ee, 0x4828), },
-	{ PCI_DEVICE(0x10ee, 0x4908), },
-	{ PCI_DEVICE(0x10ee, 0x4A28), },
-	{ PCI_DEVICE(0x10ee, 0x4B28), },
-
-	{ PCI_DEVICE(0x10ee, 0x2808), },
-
-#ifdef INTERNAL_TESTING
-	{ PCI_DEVICE(0x1d0f, 0x1042), 0},
-#endif
+	{ PCI_DEVICE(0x1d4d, 0xfe00), },
 	{0,}
 };
 MODULE_DEVICE_TABLE(pci, pci_ids);
@@ -286,7 +227,11 @@ static void xdma_error_resume(struct pci_dev *pdev)
 	struct xdma_pci_dev *xpdev = dev_get_drvdata(&pdev->dev);
 
 	pr_info("dev 0x%p,0x%p.\n", pdev, xpdev);
+#if KERNEL_VERSION(5, 7, 0) <= LINUX_VERSION_CODE
+	pci_aer_clear_nonfatal_status(pdev);
+#else
 	pci_cleanup_aer_uncorrect_error_status(pdev);
+#endif
 }
 
 #if KERNEL_VERSION(4, 13, 0) <= LINUX_VERSION_CODE
@@ -340,7 +285,7 @@ static struct pci_driver pci_driver = {
 	.err_handler = &xdma_err_handler,
 };
 
-static int __init xdma_mod_init(void)
+static int xdma_mod_init(void)
 {
 	int rv;
 
@@ -348,8 +293,8 @@ static int __init xdma_mod_init(void)
 
 	if (desc_blen_max > XDMA_DESC_BLEN_MAX)
 		desc_blen_max = XDMA_DESC_BLEN_MAX;
-	pr_info("desc_blen_max: 0x%x/%u, sgdma_timeout: %u sec.\n",
-		desc_blen_max, desc_blen_max, sgdma_timeout);
+	pr_info("desc_blen_max: 0x%x/%u, timeout: h2c %u c2h %u sec.\n",
+		desc_blen_max, desc_blen_max, h2c_timeout, c2h_timeout);
 
 	rv = xdma_cdev_init();
 	if (rv < 0)
@@ -358,7 +303,7 @@ static int __init xdma_mod_init(void)
 	return pci_register_driver(&pci_driver);
 }
 
-static void __exit xdma_mod_exit(void)
+static void xdma_mod_exit(void)
 {
 	/* unregister this driver from the PCI bus driver */
 	dbg_init("pci_unregister_driver.\n");

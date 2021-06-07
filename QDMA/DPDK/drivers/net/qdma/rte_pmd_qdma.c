@@ -1,7 +1,7 @@
 /*-
  * BSD LICENSE
  *
- * Copyright(c) 2019 Xilinx, Inc. All rights reserved.
+ * Copyright(c) 2019-2021 Xilinx, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -48,20 +48,21 @@
 #include <string.h>
 
 #include "qdma.h"
-#include "qdma_access.h"
+#include "qdma_access_common.h"
 #include "rte_pmd_qdma.h"
+#include "qdma_devops.h"
 
 
-static int validate_qdma_dev_info(int portid, uint16_t qid)
+static int validate_qdma_dev_info(int port_id, uint16_t qid)
 {
 	struct rte_eth_dev *dev;
 	struct qdma_pci_dev *qdma_dev;
 
-	if (portid < 0 || portid >= rte_eth_dev_count_avail()) {
-		PMD_DRV_LOG(ERR, "Wrong port id %d\n", portid);
+	if (port_id < 0 || port_id >= rte_eth_dev_count_avail()) {
+		PMD_DRV_LOG(ERR, "Wrong port id %d\n", port_id);
 		return -ENOTSUP;
 	}
-	dev = &rte_eth_devices[portid];
+	dev = &rte_eth_devices[port_id];
 	qdma_dev = dev->data->dev_private;
 	if (!is_qdma_supported(dev)) {
 		PMD_DRV_LOG(ERR, "Device is not supported\n");
@@ -77,7 +78,7 @@ static int validate_qdma_dev_info(int portid, uint16_t qid)
 	if (!qdma_dev->dev_configured) {
 		PMD_DRV_LOG(ERR,
 			"Device for port id %d is not configured yet\n",
-			portid);
+			port_id);
 		return -EINVAL;
 	}
 
@@ -118,26 +119,26 @@ static int8_t qdma_get_trigger_mode(enum rte_pmd_qdma_tigger_mode_t mode)
  * Function Name:	rte_pmd_qdma_get_bar_details
  * Description:		Returns the BAR indices of the QDMA BARs
  *
- * @param	portid : Port ID
+ * @param	port_id : Port ID
  * @param	config_bar_idx : Config BAR index
- * @param	user_bar_idx   : User BAR index
- * @param	bypass_bar_idx : Bypass BAR index
+ * @param	user_bar_idx   : AXI Master Lite BAR(user bar) index
+ * @param	bypass_bar_idx : AXI Bridge Master BAR(bypass bar) index
  *
  * @return	'0' on success and '< 0' on failure.
  *
  * @note   None.
  ******************************************************************************/
-int rte_pmd_qdma_get_bar_details(int portid, int32_t *config_bar_idx,
+int rte_pmd_qdma_get_bar_details(int port_id, int32_t *config_bar_idx,
 			int32_t *user_bar_idx, int32_t *bypass_bar_idx)
 {
 	struct rte_eth_dev *dev;
 	struct qdma_pci_dev *dma_priv;
 
-	if (portid < 0 || portid >= rte_eth_dev_count_avail()) {
-		PMD_DRV_LOG(ERR, "Wrong port id %d\n", portid);
+	if (port_id < 0 || port_id >= rte_eth_dev_count_avail()) {
+		PMD_DRV_LOG(ERR, "Wrong port id %d\n", port_id);
 		return -ENOTSUP;
 	}
-	dev = &rte_eth_devices[portid];
+	dev = &rte_eth_devices[port_id];
 	dma_priv = dev->data->dev_private;
 	if (!is_qdma_supported(dev)) {
 		PMD_DRV_LOG(ERR, "Device is not supported\n");
@@ -161,7 +162,7 @@ int rte_pmd_qdma_get_bar_details(int portid, int32_t *config_bar_idx,
  * Function Name:	rte_pmd_qdma_get_queue_base
  * Description:		Returns queue base for given port
  *
- * @param	portid : Port ID.
+ * @param	port_id : Port ID.
  * @param	queue_base : queue base.
  *
  * @return	'0' on success and '< 0' on failure.
@@ -169,16 +170,16 @@ int rte_pmd_qdma_get_bar_details(int portid, int32_t *config_bar_idx,
  * @note    Application can call this API only after successful
  *          call to rte_eh_dev_configure() API.
  ******************************************************************************/
-int rte_pmd_qdma_get_queue_base(int portid, uint32_t *queue_base)
+int rte_pmd_qdma_get_queue_base(int port_id, uint32_t *queue_base)
 {
 	struct rte_eth_dev *dev;
 	struct qdma_pci_dev *dma_priv;
 
-	if (portid < 0 || portid >= rte_eth_dev_count_avail()) {
-		PMD_DRV_LOG(ERR, "Wrong port id %d\n", portid);
+	if (port_id < 0 || port_id >= rte_eth_dev_count_avail()) {
+		PMD_DRV_LOG(ERR, "Wrong port id %d\n", port_id);
 		return -ENOTSUP;
 	}
-	dev = &rte_eth_devices[portid];
+	dev = &rte_eth_devices[port_id];
 	dma_priv = dev->data->dev_private;
 	if (!is_qdma_supported(dev)) {
 		PMD_DRV_LOG(ERR, "Device is not supported\n");
@@ -200,24 +201,24 @@ int rte_pmd_qdma_get_queue_base(int portid, uint32_t *queue_base)
  * Function Name:	rte_pmd_qdma_get_pci_func_type
  * Description:		Retrieves pci function type i.e. PF or VF
  *
- * @param	portid : Port ID.
+ * @param	port_id : Port ID.
  * @param	func_type : Indicates pci function type.
  *
  * @return	'0' on success and '< 0' on failure.
  *
  * @note    Returns the PCIe function type i.e. PF or VF of the given port.
  ******************************************************************************/
-int rte_pmd_qdma_get_pci_func_type(int portid,
+int rte_pmd_qdma_get_pci_func_type(int port_id,
 		enum rte_pmd_qdma_pci_func_type *func_type)
 {
 	struct rte_eth_dev *dev;
 	struct qdma_pci_dev *dma_priv;
 
-	if (portid < 0 || portid >= rte_eth_dev_count_avail()) {
-		PMD_DRV_LOG(ERR, "Wrong port id %d\n", portid);
+	if (port_id < 0 || port_id >= rte_eth_dev_count_avail()) {
+		PMD_DRV_LOG(ERR, "Wrong port id %d\n", port_id);
 		return -ENOTSUP;
 	}
-	dev = &rte_eth_devices[portid];
+	dev = &rte_eth_devices[port_id];
 	dma_priv = dev->data->dev_private;
 	if (!is_qdma_supported(dev)) {
 		PMD_DRV_LOG(ERR, "Device is not supported\n");
@@ -242,7 +243,7 @@ int rte_pmd_qdma_get_pci_func_type(int portid,
  *			i.e. whether enabled or disabled, for the specified
  *			queue
  *
- * @param	portid : Port ID.
+ * @param	port_id : Port ID.
  * @param	qid : Queue ID.
  * @param	state : Pointer to the state specifying whether
  *			immediate data is enabled or not
@@ -254,7 +255,7 @@ int rte_pmd_qdma_get_pci_func_type(int portid,
  *		rte_eth_rx_queue_setup() is called.
  *		API is applicable for streaming queues only.
  ******************************************************************************/
-int rte_pmd_qdma_get_immediate_data_state(int portid, uint32_t qid,
+int rte_pmd_qdma_get_immediate_data_state(int port_id, uint32_t qid,
 		int *state)
 {
 	struct rte_eth_dev *dev;
@@ -262,14 +263,14 @@ int rte_pmd_qdma_get_immediate_data_state(int portid, uint32_t qid,
 	struct qdma_rx_queue *rxq;
 	int ret = 0;
 
-	ret = validate_qdma_dev_info(portid, qid);
+	ret = validate_qdma_dev_info(port_id, qid);
 	if (ret != QDMA_SUCCESS) {
 		PMD_DRV_LOG(ERR,
 			"QDMA device validation failed for port id %d\n",
-			portid);
+			port_id);
 		return ret;
 	}
-	dev = &rte_eth_devices[portid];
+	dev = &rte_eth_devices[port_id];
 	qdma_dev = dev->data->dev_private;
 	if (qid >= dev->data->nb_rx_queues) {
 		PMD_DRV_LOG(ERR, "Invalid Q-id passed qid %d max en_qid %d\n",
@@ -305,7 +306,7 @@ int rte_pmd_qdma_get_immediate_data_state(int portid, uint32_t qid,
  * Function Name:	rte_pmd_qdma_set_queue_mode
  * Description:		Sets queue mode for the specified queue
  *
- * @param	portid : Port ID.
+ * @param	port_id : Port ID.
  * @param	qid : Queue ID.
  * @param	mode : Queue mode to be set
  *
@@ -316,21 +317,21 @@ int rte_pmd_qdma_get_immediate_data_state(int portid, uint32_t qid,
  *		rte_eth_tx_queue_setup/rte_eth_rx_queue_setup() API.
  *		By default, all queues are setup in streaming mode.
  ******************************************************************************/
-int rte_pmd_qdma_set_queue_mode(int portid, uint32_t qid,
+int rte_pmd_qdma_set_queue_mode(int port_id, uint32_t qid,
 		enum rte_pmd_qdma_queue_mode_t mode)
 {
 	struct rte_eth_dev *dev;
 	struct qdma_pci_dev *qdma_dev;
 	int ret = 0;
 
-	ret = validate_qdma_dev_info(portid, qid);
+	ret = validate_qdma_dev_info(port_id, qid);
 	if (ret != QDMA_SUCCESS) {
 		PMD_DRV_LOG(ERR,
 			"QDMA device validation failed for port id %d\n",
-			portid);
+			port_id);
 		return ret;
 	}
-	dev = &rte_eth_devices[portid];
+	dev = &rte_eth_devices[port_id];
 	qdma_dev = dev->data->dev_private;
 	if (mode >= RTE_PMD_QDMA_QUEUE_MODE_MAX) {
 		PMD_DRV_LOG(ERR, "Invalid Queue mode passed,Mode = %d\n", mode);
@@ -351,7 +352,7 @@ int rte_pmd_qdma_set_queue_mode(int portid, uint32_t qid,
  *			ring are dumped in to a queue specific file
  *			"q_<qid>_immmediate_data.txt" in the local directory.
  *
- * @param	portid : Port ID.
+ * @param	port_id : Port ID.
  * @param	qid : Queue ID.
  * @param	value :	Immediate data state to be set
  *			Set '0' to disable and '1' to enable
@@ -365,7 +366,7 @@ int rte_pmd_qdma_set_queue_mode(int portid, uint32_t qid,
  *		start state. This API is applicable for
  *		streaming queues only.
  ******************************************************************************/
-int rte_pmd_qdma_set_immediate_data_state(int portid, uint32_t qid,
+int rte_pmd_qdma_set_immediate_data_state(int port_id, uint32_t qid,
 		uint8_t state)
 {
 	struct rte_eth_dev *dev;
@@ -373,14 +374,14 @@ int rte_pmd_qdma_set_immediate_data_state(int portid, uint32_t qid,
 	struct qdma_rx_queue *rxq;
 	int ret = 0;
 
-	ret = validate_qdma_dev_info(portid, qid);
+	ret = validate_qdma_dev_info(port_id, qid);
 	if (ret != QDMA_SUCCESS) {
 		PMD_DRV_LOG(ERR,
 			"QDMA device validation failed for port id %d\n",
-			portid);
+			port_id);
 		return ret;
 	}
-	dev = &rte_eth_devices[portid];
+	dev = &rte_eth_devices[port_id];
 	qdma_dev = dev->data->dev_private;
 	if (qid >= dev->data->nb_rx_queues) {
 		PMD_DRV_LOG(ERR, "Invalid RX Queue id passed for %s,"
@@ -431,7 +432,7 @@ int rte_pmd_qdma_set_immediate_data_state(int portid, uint32_t qid,
  *			QDMA on the completion descriptor ring of specified
  *			queue.
  *
- * @param	portid : Port ID.
+ * @param	port_id : Port ID.
  * @param	qid	   : Queue ID.
  * @param	enable :  '1' to enable and '0' to disable the overflow check
  *
@@ -443,7 +444,7 @@ int rte_pmd_qdma_set_immediate_data_state(int portid, uint32_t qid,
  *		rte_pmd_qdma_dev_cmptq_setup() API only if
  *		rx/cmpt queue is not in start state.
  ******************************************************************************/
-int rte_pmd_qdma_set_cmpt_overflow_check(int portid, uint32_t qid,
+int rte_pmd_qdma_set_cmpt_overflow_check(int port_id, uint32_t qid,
 		uint8_t enable)
 {
 	struct rte_eth_dev *dev;
@@ -452,14 +453,14 @@ int rte_pmd_qdma_set_cmpt_overflow_check(int portid, uint32_t qid,
 	struct qdma_rx_queue *rxq;
 	int ret = 0;
 
-	ret = validate_qdma_dev_info(portid, qid);
+	ret = validate_qdma_dev_info(port_id, qid);
 	if (ret != QDMA_SUCCESS) {
 		PMD_DRV_LOG(ERR,
 			"QDMA device validation failed for port id %d\n",
-			portid);
+			port_id);
 		return ret;
 	}
-	dev = &rte_eth_devices[portid];
+	dev = &rte_eth_devices[port_id];
 	qdma_dev = dev->data->dev_private;
 	if (enable > 1)
 		return -EINVAL;
@@ -533,7 +534,7 @@ int rte_pmd_qdma_set_cmpt_overflow_check(int portid, uint32_t qid,
  * Function Name:	rte_pmd_qdma_set_cmpt_descriptor_size
  * Description:		Configures the completion ring descriptor size
  *
- * @param	portid : Port ID.
+ * @param	port_id : Port ID.
  * @param	qid : Queue ID.
  * @param	size : Descriptor size to be configured
  *
@@ -546,21 +547,21 @@ int rte_pmd_qdma_set_cmpt_overflow_check(int portid, uint32_t qid,
  *		mode.
  *		By default, the completion desciptor size is set to 8 bytes.
  ******************************************************************************/
-int rte_pmd_qdma_set_cmpt_descriptor_size(int portid, uint32_t qid,
+int rte_pmd_qdma_set_cmpt_descriptor_size(int port_id, uint32_t qid,
 		enum rte_pmd_qdma_cmpt_desc_len size)
 {
 	struct rte_eth_dev *dev;
 	struct qdma_pci_dev *qdma_dev;
 	int ret = 0;
 
-	ret = validate_qdma_dev_info(portid, qid);
+	ret = validate_qdma_dev_info(port_id, qid);
 	if (ret != QDMA_SUCCESS) {
 		PMD_DRV_LOG(ERR,
 			"QDMA device validation failed for port id %d\n",
-			portid);
+			port_id);
 		return ret;
 	}
-	dev = &rte_eth_devices[portid];
+	dev = &rte_eth_devices[port_id];
 	qdma_dev = dev->data->dev_private;
 	if (qdma_dev->q_info[qid].queue_mode ==
 			RTE_PMD_QDMA_STREAMING_MODE) {
@@ -594,7 +595,7 @@ int rte_pmd_qdma_set_cmpt_descriptor_size(int portid, uint32_t qid,
  * Description:		Configures the trigger mode for completion ring CIDX
  *			updates
  *
- * @param	portid : Port ID.
+ * @param	port_id : Port ID.
  * @param	qid : Queue ID.
  * @param	mode : Trigger mode to be configured
  *
@@ -607,7 +608,7 @@ int rte_pmd_qdma_set_cmpt_descriptor_size(int portid, uint32_t qid,
  *		API only if rx/cmpt queue is not in start state.
  *		By default, trigger mode is set to Counter + Timer.
  ******************************************************************************/
-int rte_pmd_qdma_set_cmpt_trigger_mode(int portid, uint32_t qid,
+int rte_pmd_qdma_set_cmpt_trigger_mode(int port_id, uint32_t qid,
 				enum rte_pmd_qdma_tigger_mode_t mode)
 {
 	struct rte_eth_dev *dev;
@@ -616,14 +617,14 @@ int rte_pmd_qdma_set_cmpt_trigger_mode(int portid, uint32_t qid,
 	struct qdma_rx_queue *rxq;
 	int ret = 0;
 
-	ret = validate_qdma_dev_info(portid, qid);
+	ret = validate_qdma_dev_info(port_id, qid);
 	if (ret != QDMA_SUCCESS) {
 		PMD_DRV_LOG(ERR,
 			"QDMA device validation failed for port id %d\n",
-			portid);
+			port_id);
 		return ret;
 	}
-	dev = &rte_eth_devices[portid];
+	dev = &rte_eth_devices[port_id];
 	qdma_dev = dev->data->dev_private;
 	if (mode >= RTE_PMD_QDMA_TRIG_MODE_MAX) {
 		PMD_DRV_LOG(ERR, "Invalid Trigger mode passed\n");
@@ -706,7 +707,7 @@ int rte_pmd_qdma_set_cmpt_trigger_mode(int portid, uint32_t qid,
  * Description:		Configures the timer interval in microseconds to trigger
  *			the completion ring CIDX updates
  *
- * @param	portid : Port ID.
+ * @param	port_id : Port ID.
  * @param	qid : Queue ID.
  * @param	value : Timer interval for completion trigger to be configured
  *
@@ -718,7 +719,7 @@ int rte_pmd_qdma_set_cmpt_trigger_mode(int portid, uint32_t qid,
  *		rte_eth_rx_queue_setup()/rte_pmd_qdma_dev_cmptq_setup() API
  *		only if rx/cmpt queue is not in start state.
  ******************************************************************************/
-int rte_pmd_qdma_set_cmpt_timer(int portid, uint32_t qid, uint32_t value)
+int rte_pmd_qdma_set_cmpt_timer(int port_id, uint32_t qid, uint32_t value)
 {
 	struct rte_eth_dev *dev;
 	struct qdma_pci_dev *qdma_dev;
@@ -727,14 +728,14 @@ int rte_pmd_qdma_set_cmpt_timer(int portid, uint32_t qid, uint32_t value)
 	int8_t timer_index;
 	int ret = 0;
 
-	ret = validate_qdma_dev_info(portid, qid);
+	ret = validate_qdma_dev_info(port_id, qid);
 	if (ret != QDMA_SUCCESS) {
 		PMD_DRV_LOG(ERR,
 			"QDMA device validation failed for port id %d\n",
-			portid);
+			port_id);
 		return ret;
 	}
-	dev = &rte_eth_devices[portid];
+	dev = &rte_eth_devices[port_id];
 	qdma_dev = dev->data->dev_private;
 	timer_index = index_of_array(qdma_dev->g_c2h_timer_cnt,
 			QDMA_NUM_C2H_TIMERS,
@@ -808,7 +809,7 @@ int rte_pmd_qdma_set_cmpt_timer(int portid, uint32_t qid, uint32_t value)
  *Description:		Enables or disables prefetch of the descriptors by
  *			prefetch engine
  *
- * @param	portid : Port ID.
+ * @param	port_id : Port ID.
  * @param	qid : Queue ID.
  * @param	enable:'1' to enable and '0' to disable the descriptor prefetch
  *
@@ -820,7 +821,7 @@ int rte_pmd_qdma_set_cmpt_timer(int portid, uint32_t qid, uint32_t value)
  *		rte_eth_rx_queue_setup() API, only if rx queue
  *		is not in start state.
  ******************************************************************************/
-int rte_pmd_qdma_set_c2h_descriptor_prefetch(int portid, uint32_t qid,
+int rte_pmd_qdma_set_c2h_descriptor_prefetch(int port_id, uint32_t qid,
 		uint8_t enable)
 {
 	struct rte_eth_dev *dev;
@@ -828,14 +829,14 @@ int rte_pmd_qdma_set_c2h_descriptor_prefetch(int portid, uint32_t qid,
 	struct qdma_rx_queue *rxq;
 	int ret = 0;
 
-	ret = validate_qdma_dev_info(portid, qid);
+	ret = validate_qdma_dev_info(port_id, qid);
 	if (ret != QDMA_SUCCESS) {
 		PMD_DRV_LOG(ERR,
 			"QDMA device validation failed for port id %d\n",
-			portid);
+			port_id);
 		return ret;
 	}
-	dev = &rte_eth_devices[portid];
+	dev = &rte_eth_devices[port_id];
 	qdma_dev = dev->data->dev_private;
 	if (qid >= dev->data->nb_rx_queues) {
 		PMD_DRV_LOG(ERR, "Invalid Queue id passed for %s, "
@@ -881,7 +882,7 @@ int rte_pmd_qdma_set_c2h_descriptor_prefetch(int portid, uint32_t qid,
  *			perform DMA operation for the specified queue operating
  *			in memory mapped mode.
  *
- * @param	portid : Port ID.
+ * @param	port_id : Port ID.
  * @param	qid : Queue ID.
  * @param	dir : direction i.e. TX or RX.
  * @param	addr : Destination address for TX , Source address for RX
@@ -891,7 +892,7 @@ int rte_pmd_qdma_set_c2h_descriptor_prefetch(int portid, uint32_t qid,
  * @note	This API can be called before TX/RX burst API's
  *		(rte_eth_tx_burst() and rte_eth_rx_burst()) are called.
  *****************************************************************************/
-int rte_pmd_qdma_set_mm_endpoint_addr(int portid, uint32_t qid,
+int rte_pmd_qdma_set_mm_endpoint_addr(int port_id, uint32_t qid,
 			enum rte_pmd_qdma_dir_type dir, uint32_t addr)
 {
 	struct rte_eth_dev *dev;
@@ -900,14 +901,14 @@ int rte_pmd_qdma_set_mm_endpoint_addr(int portid, uint32_t qid,
 	struct qdma_tx_queue *txq;
 	int ret = 0;
 
-	ret = validate_qdma_dev_info(portid, qid);
+	ret = validate_qdma_dev_info(port_id, qid);
 	if (ret != QDMA_SUCCESS) {
 		PMD_DRV_LOG(ERR,
 			"QDMA device validation failed for port id %d\n",
-			portid);
+			port_id);
 		return ret;
 	}
-	dev = &rte_eth_devices[portid];
+	dev = &rte_eth_devices[port_id];
 	qdma_dev = dev->data->dev_private;
 	if (qdma_dev->q_info[qid].queue_mode !=
 		RTE_PMD_QDMA_MEMORY_MAPPED_MODE) {
@@ -947,7 +948,7 @@ int rte_pmd_qdma_set_mm_endpoint_addr(int portid, uint32_t qid,
  * Description:		Sets the TX bypass mode and bypass descriptor size
  *			for the specified queue
  *
- * @param	portid : Port ID.
+ * @param	port_id : Port ID.
  * @param	qid : Queue ID.
  * @param	bypass_mode : Bypass mode to be set
  * @param	size : Bypass descriptor size to be set
@@ -961,7 +962,7 @@ int rte_pmd_qdma_set_mm_endpoint_addr(int portid, uint32_t qid,
  *		If size is specified zero, then the bypass descriptor size is
  *		set to the one used in internal mode.
  ******************************************************************************/
-int rte_pmd_qdma_configure_tx_bypass(int portid, uint32_t qid,
+int rte_pmd_qdma_configure_tx_bypass(int port_id, uint32_t qid,
 		enum rte_pmd_qdma_tx_bypass_mode bypass_mode,
 		enum rte_pmd_qdma_bypass_desc_len size)
 {
@@ -969,14 +970,14 @@ int rte_pmd_qdma_configure_tx_bypass(int portid, uint32_t qid,
 	struct qdma_pci_dev *qdma_dev;
 	int ret = 0;
 
-	ret = validate_qdma_dev_info(portid, qid);
+	ret = validate_qdma_dev_info(port_id, qid);
 	if (ret != QDMA_SUCCESS) {
 		PMD_DRV_LOG(ERR,
 			"QDMA device validation failed for port id %d\n",
-			portid);
+			port_id);
 		return ret;
 	}
-	dev = &rte_eth_devices[portid];
+	dev = &rte_eth_devices[port_id];
 	qdma_dev = dev->data->dev_private;
 	if (qid < dev->data->nb_tx_queues) {
 		if (bypass_mode >= RTE_PMD_QDMA_TX_BYPASS_MAX) {
@@ -1028,7 +1029,7 @@ int rte_pmd_qdma_configure_tx_bypass(int portid, uint32_t qid,
  * Description:		Sets the RX bypass mode and bypass descriptor size for
  *			the specified queue
  *
- * @param	portid : Port ID.
+ * @param	port_id : Port ID.
  * @param	qid : Queue ID.
  * @param	bypass_mode : Bypass mode to be set
  * @param	size : Bypass descriptor size to be set
@@ -1042,7 +1043,7 @@ int rte_pmd_qdma_configure_tx_bypass(int portid, uint32_t qid,
  *		If size is specified zero, then the bypass descriptor size is
  *		set to the one used in internal mode.
  ******************************************************************************/
-int rte_pmd_qdma_configure_rx_bypass(int portid, uint32_t qid,
+int rte_pmd_qdma_configure_rx_bypass(int port_id, uint32_t qid,
 		enum rte_pmd_qdma_rx_bypass_mode bypass_mode,
 		enum rte_pmd_qdma_bypass_desc_len size)
 {
@@ -1050,14 +1051,14 @@ int rte_pmd_qdma_configure_rx_bypass(int portid, uint32_t qid,
 	struct qdma_pci_dev *qdma_dev;
 	int ret = 0;
 
-	ret = validate_qdma_dev_info(portid, qid);
+	ret = validate_qdma_dev_info(port_id, qid);
 	if (ret != QDMA_SUCCESS) {
 		PMD_DRV_LOG(ERR,
 			"QDMA device validation failed for port id %d\n",
-			portid);
+			port_id);
 		return ret;
 	}
-	dev = &rte_eth_devices[portid];
+	dev = &rte_eth_devices[port_id];
 	qdma_dev = dev->data->dev_private;
 	if (qid < dev->data->nb_rx_queues) {
 		if (bypass_mode >= RTE_PMD_QDMA_RX_BYPASS_MAX) {
@@ -1110,24 +1111,24 @@ int rte_pmd_qdma_configure_rx_bypass(int portid, uint32_t qid,
  * Function Name:	rte_pmd_qdma_get_device_capabilities
  * Description:		Retrive the device capabilities
  *
- * @param   portid : Port ID.
+ * @param   port_id : Port ID.
  * @param   dev_attr:Pointer to the device capabilities structure
  *
  * @return  '0' on success and '< 0' on failure.
  *
  * @note	None.
  ******************************************************************************/
-int rte_pmd_qdma_get_device_capabilities(int portid,
+int rte_pmd_qdma_get_device_capabilities(int port_id,
 		struct rte_pmd_qdma_dev_attributes *dev_attr)
 {
 	struct rte_eth_dev *dev;
 	struct qdma_pci_dev *qdma_dev;
 
-	if (portid < 0 || portid >= rte_eth_dev_count_avail()) {
-		PMD_DRV_LOG(ERR, "Wrong port id %d\n", portid);
+	if (port_id < 0 || port_id >= rte_eth_dev_count_avail()) {
+		PMD_DRV_LOG(ERR, "Wrong port id %d\n", port_id);
 		return -ENOTSUP;
 	}
-	dev = &rte_eth_devices[portid];
+	dev = &rte_eth_devices[port_id];
 	qdma_dev = dev->data->dev_private;
 	if (!is_qdma_supported(dev)) {
 		PMD_DRV_LOG(ERR, "Device is not supported\n");
@@ -1147,6 +1148,8 @@ int rte_pmd_qdma_get_device_capabilities(int portid,
 	dev_attr->mm_cmpt_en = qdma_dev->dev_cap.mm_cmpt_en;
 	dev_attr->mailbox_en = qdma_dev->dev_cap.mailbox_en;
 	dev_attr->mm_channel_max = qdma_dev->dev_cap.mm_channel_max;
+	dev_attr->debug_mode = qdma_dev->dev_cap.debug_mode;
+	dev_attr->desc_eng_mode = qdma_dev->dev_cap.desc_eng_mode;
 	dev_attr->cmpt_ovf_chk_dis = qdma_dev->dev_cap.cmpt_ovf_chk_dis;
 	dev_attr->sw_desc_64b = qdma_dev->dev_cap.sw_desc_64b;
 	dev_attr->cmpt_desc_64b = qdma_dev->dev_cap.cmpt_desc_64b;
@@ -1160,33 +1163,36 @@ int rte_pmd_qdma_get_device_capabilities(int portid,
 	case QDMA_DEVICE_VERSAL:
 		dev_attr->device_type = RTE_PMD_QDMA_DEVICE_VERSAL;
 		break;
-	case QDMA_DEVICE_VERSAL_CPM5:
-		dev_attr->device_type = RTE_PMD_QDMA_DEVICE_VERSAL_CPM5;
-		break;
 	default:
 		PMD_DRV_LOG(ERR, "%s: Invalid device type "
 			"Id = %d\n",	__func__, qdma_dev->device_type);
 		return -EINVAL;
 	}
 
-	if (qdma_dev->device_type != QDMA_DEVICE_SOFT) {
-		switch (qdma_dev->versal_ip_type) {
-		case QDMA_VERSAL_HARD_IP:
-			dev_attr->versal_ip_type =
-				RTE_PMD_QDMA_VERSAL_HARD_IP;
-			break;
-		case QDMA_VERSAL_SOFT_IP:
-			dev_attr->versal_ip_type =
-				RTE_PMD_QDMA_VERSAL_SOFT_IP;
-			break;
-		default:
-			PMD_DRV_LOG(ERR, "%s: Invalid versal IP type "
-				"ip type = %d\n", __func__,
-				qdma_dev->versal_ip_type);
-			return -EINVAL;
-		}
-	} else
-		dev_attr->versal_ip_type = RTE_PMD_QDMA_VERSAL_NONE;
+	switch (qdma_dev->ip_type) {
+	case QDMA_VERSAL_HARD_IP:
+		dev_attr->ip_type =
+			RTE_PMD_QDMA_VERSAL_HARD_IP;
+		break;
+	case QDMA_VERSAL_SOFT_IP:
+		dev_attr->ip_type =
+			RTE_PMD_QDMA_VERSAL_SOFT_IP;
+		break;
+	case QDMA_SOFT_IP:
+		dev_attr->ip_type =
+			RTE_PMD_QDMA_SOFT_IP;
+		break;
+	case EQDMA_SOFT_IP:
+		dev_attr->ip_type =
+			RTE_PMD_EQDMA_SOFT_IP;
+		break;
+	default:
+		dev_attr->ip_type = RTE_PMD_QDMA_NONE_IP;
+		PMD_DRV_LOG(ERR, "%s: Invalid IP type "
+			"ip_type = %d\n", __func__,
+			qdma_dev->ip_type);
+		return -EINVAL;
+	}
 
 	return 0;
 }
@@ -1197,7 +1203,7 @@ int rte_pmd_qdma_get_device_capabilities(int portid,
  * Description:		Allocate and set up a completion queue for
  *			memory mapped mode.
  *
- * @param   portid : Port ID.
+ * @param   port_id : Port ID.
  * @param   qid : Queue ID.
  * @param   nb_cmpt_desc:	Completion queue ring size.
  * @param   socket_id :	The socket_id argument is the socket identifier
@@ -1212,28 +1218,26 @@ int rte_pmd_qdma_get_device_capabilities(int portid,
  *		for queues in memory mapped mode.
  ******************************************************************************/
 
-int rte_pmd_qdma_dev_cmptq_setup(int portid, uint32_t cmpt_queue_id,
+int rte_pmd_qdma_dev_cmptq_setup(int port_id, uint32_t cmpt_queue_id,
 				 uint16_t nb_cmpt_desc,
 				 unsigned int socket_id)
 {
 	struct rte_eth_dev *dev;
 	uint32_t sz;
 	struct qdma_pci_dev *qdma_dev;
-	struct rte_pci_device *pci_dev;
 	struct qdma_cmpt_queue *cmptq = NULL;
 	int err;
 	int ret = 0;
 
-	ret = validate_qdma_dev_info(portid, cmpt_queue_id);
+	ret = validate_qdma_dev_info(port_id, cmpt_queue_id);
 	if (ret != QDMA_SUCCESS) {
 		PMD_DRV_LOG(ERR,
 			"QDMA device validation failed for port id %d\n",
-			portid);
+			port_id);
 		return ret;
 	}
-	dev = &rte_eth_devices[portid];
+	dev = &rte_eth_devices[port_id];
 	qdma_dev = dev->data->dev_private;
-	pci_dev = RTE_ETH_DEV_TO_PCI(dev);
 	if (nb_cmpt_desc == 0) {
 		PMD_DRV_LOG(ERR, "Invalid descriptor ring size %d\n",
 				nb_cmpt_desc);
@@ -1247,8 +1251,10 @@ int rte_pmd_qdma_dev_cmptq_setup(int portid, uint32_t cmpt_queue_id,
 	}
 
 	if (!qdma_dev->is_vf) {
-		err = qdma_dev_increment_active_queue(pci_dev->addr.bus,
-				qdma_dev->func_id, QDMA_DEV_Q_TYPE_CMPT);
+		err = qdma_dev_increment_active_queue(
+					qdma_dev->dma_device_index,
+					qdma_dev->func_id,
+					QDMA_DEV_Q_TYPE_CMPT);
 		if (err != QDMA_SUCCESS)
 			return -EINVAL;
 	} else {
@@ -1361,7 +1367,7 @@ int rte_pmd_qdma_dev_cmptq_setup(int portid, uint32_t cmpt_queue_id,
 
 cmptq_setup_err:
 	if (!qdma_dev->is_vf)
-		qdma_dev_decrement_active_queue(pci_dev->addr.bus,
+		qdma_dev_decrement_active_queue(qdma_dev->dma_device_index,
 				qdma_dev->func_id, QDMA_DEV_Q_TYPE_CMPT);
 	else
 		qdma_dev_notify_qdel(dev, cmpt_queue_id +
@@ -1415,7 +1421,7 @@ static int qdma_vf_cmptq_context_write(struct rte_eth_dev *dev, uint16_t qid)
 	descq_conf.irq_en = 0;
 	descq_conf.desc_sz = SW_DESC_CNTXT_MEMORY_MAP_DMA;
 	descq_conf.forced_en = 1;
-	descq_conf.cmpt_ring_bs_addr = cmptq->cmpt_mz->phys_addr;
+	descq_conf.cmpt_ring_bs_addr = cmptq->cmpt_mz->iova;
 	descq_conf.cmpt_desc_sz = cmpt_desc_fmt;
 	descq_conf.triggermode = cmptq->triggermode;
 
@@ -1499,7 +1505,7 @@ static int qdma_pf_cmptq_context_write(struct rte_eth_dev *dev, uint32_t qid)
 	q_cmpt_ctxt.timer_idx = cmptq->timeridx;
 	q_cmpt_ctxt.color = CMPT_DEFAULT_COLOR_BIT;
 	q_cmpt_ctxt.ringsz_idx = cmptq->ringszidx;
-	q_cmpt_ctxt.bs_addr = (uint64_t)cmptq->cmpt_mz->phys_addr;
+	q_cmpt_ctxt.bs_addr = (uint64_t)cmptq->cmpt_mz->iova;
 	q_cmpt_ctxt.desc_sz = cmpt_desc_fmt;
 	q_cmpt_ctxt.valid = 1;
 
@@ -1509,7 +1515,7 @@ static int qdma_pf_cmptq_context_write(struct rte_eth_dev *dev, uint32_t qid)
 	/* Set Completion Context */
 	err = qdma_dev->hw_access->qdma_cmpt_ctx_conf(dev, (qid + queue_base),
 				&q_cmpt_ctxt, QDMA_HW_ACCESS_WRITE);
-	if (err != QDMA_SUCCESS)
+	if (err < 0)
 		return qdma_dev->hw_access->qdma_get_error_code(err);
 
 	cmptq->cmpt_cidx_info.counter_idx = cmptq->threshidx;
@@ -1529,7 +1535,7 @@ static int qdma_pf_cmptq_context_write(struct rte_eth_dev *dev, uint32_t qid)
  * Function Name:   rte_pmd_qdma_dev_cmptq_start
  * Description:     Start the MM completion queue.
  *
- * @param   portid : Port ID.
+ * @param   port_id : Port ID.
  * @param   qid : Queue ID.
  *
  * @return  '0' on success and '< 0' on failure.
@@ -1538,20 +1544,20 @@ static int qdma_pf_cmptq_context_write(struct rte_eth_dev *dev, uint32_t qid)
  *		rte_pmd_qdma_dev_cmptq_setup() API when queue is in
  *		memory mapped mode.
  ******************************************************************************/
-int rte_pmd_qdma_dev_cmptq_start(int portid, uint32_t qid)
+int rte_pmd_qdma_dev_cmptq_start(int port_id, uint32_t qid)
 {
 	struct rte_eth_dev *dev;
 	struct qdma_pci_dev *qdma_dev;
 	int ret = 0;
 
-	ret = validate_qdma_dev_info(portid, qid);
+	ret = validate_qdma_dev_info(port_id, qid);
 	if (ret != QDMA_SUCCESS) {
 		PMD_DRV_LOG(ERR,
 			"QDMA device validation failed for port id %d\n",
-			portid);
+			port_id);
 		return ret;
 	}
-	dev = &rte_eth_devices[portid];
+	dev = &rte_eth_devices[port_id];
 	qdma_dev = dev->data->dev_private;
 	if (qdma_dev->q_info[qid].queue_mode !=
 			RTE_PMD_QDMA_MEMORY_MAPPED_MODE) {
@@ -1634,7 +1640,7 @@ err_out:
  * Function Name:   rte_pmd_qdma_dev_cmptq_stop
  * Description:     Stop the MM completion queue.
  *
- * @param   portid : Port ID.
+ * @param   port_id : Port ID.
  * @param   qid : Queue ID.
  *
  * @return  '0' on success and '< 0' on failure.
@@ -1643,20 +1649,20 @@ err_out:
  *		rte_pmd_qdma_dev_cmptq_start() API when queue is in
  *		memory mapped mode.
  ******************************************************************************/
-int rte_pmd_qdma_dev_cmptq_stop(int portid, uint32_t qid)
+int rte_pmd_qdma_dev_cmptq_stop(int port_id, uint32_t qid)
 {
 	struct rte_eth_dev *dev;
 	struct qdma_pci_dev *qdma_dev;
 	int ret = 0;
 
-	ret = validate_qdma_dev_info(portid, qid);
+	ret = validate_qdma_dev_info(port_id, qid);
 	if (ret != QDMA_SUCCESS) {
 		PMD_DRV_LOG(ERR,
 			"QDMA device validation failed for port id %d\n",
-			portid);
+			port_id);
 		return ret;
 	}
-	dev = &rte_eth_devices[portid];
+	dev = &rte_eth_devices[port_id];
 	qdma_dev = dev->data->dev_private;
 	if (qdma_dev->q_info[qid].queue_mode !=
 			RTE_PMD_QDMA_MEMORY_MAPPED_MODE) {
@@ -1675,7 +1681,7 @@ int rte_pmd_qdma_dev_cmptq_stop(int portid, uint32_t qid)
  * Function Name:   rte_pmd_qdma_mm_cmpt_process
  * Description:     Process the MM Completion queue entries.
  *
- * @param   portid : Port ID.
+ * @param   port_id : Port ID.
  * @param   qid : Queue ID.
  * @param   cmpt_buff : User buffer pointer to store the completion data.
  * @param   nb_entries: Number of compeltion entries to process.
@@ -1686,7 +1692,7 @@ int rte_pmd_qdma_dev_cmptq_stop(int portid, uint32_t qid)
  *	    rte_pmd_qdma_dev_cmptq_start() API.
  ******************************************************************************/
 
-uint16_t rte_pmd_qdma_mm_cmpt_process(int portid, uint32_t qid,
+uint16_t rte_pmd_qdma_mm_cmpt_process(int port_id, uint32_t qid,
 					void *cmpt_buff, uint16_t nb_entries)
 {
 	struct rte_eth_dev *dev;
@@ -1700,14 +1706,14 @@ uint16_t rte_pmd_qdma_mm_cmpt_process(int portid, uint32_t qid,
 	uint16_t cmpt_pidx;
 	int ret = 0;
 
-	ret = validate_qdma_dev_info(portid, qid);
+	ret = validate_qdma_dev_info(port_id, qid);
 	if (ret != QDMA_SUCCESS) {
 		PMD_DRV_LOG(ERR,
 			"QDMA device validation failed for port id %d\n",
-			portid);
+			port_id);
 		return ret;
 	}
-	dev = &rte_eth_devices[portid];
+	dev = &rte_eth_devices[port_id];
 	qdma_dev = dev->data->dev_private;
 	if (qdma_dev->q_info[qid].queue_mode !=
 			RTE_PMD_QDMA_MEMORY_MAPPED_MODE) {
@@ -1768,4 +1774,43 @@ uint16_t rte_pmd_qdma_mm_cmpt_process(int portid, uint32_t qid,
 			cmptq->queue_id,
 			&cmptq->cmpt_cidx_info);
 	return count;
+}
+
+/*****************************************************************************/
+/**
+ * Function Name:   rte_pmd_qdma_dev_close
+ * Description:     DPDK PMD function to close the device.
+ *
+ * @param   port_id Port ID
+ *
+ * @return  '0' on success and '< 0' on failure
+ *
+ ******************************************************************************/
+int rte_pmd_qdma_dev_close(uint16_t port_id)
+{
+	struct rte_eth_dev *dev;
+	struct qdma_pci_dev *qdma_dev;
+
+	if (port_id >= rte_eth_dev_count_avail()) {
+		PMD_DRV_LOG(ERR, "Wrong port id %d\n", port_id);
+		return -ENOTSUP;
+	}
+	dev = &rte_eth_devices[port_id];
+	qdma_dev = dev->data->dev_private;
+
+	dev->data->dev_started = 0;
+
+	if (qdma_dev->is_vf)
+		qdma_vf_dev_close(dev);
+	else
+		qdma_dev_close(dev);
+
+	dev->data->nb_rx_queues = 0;
+	rte_free(dev->data->rx_queues);
+	dev->data->rx_queues = NULL;
+	dev->data->nb_tx_queues = 0;
+	rte_free(dev->data->tx_queues);
+	dev->data->tx_queues = NULL;
+
+	return 0;
 }
